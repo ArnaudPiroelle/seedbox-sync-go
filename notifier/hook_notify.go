@@ -83,9 +83,7 @@ func (n *HookNotifier) request(hook model.Hook) (err error) {
 		return
 	}
 
-	go func() {
-		_, _ = n.httpC.Do(req)
-	}()
+	_, _ = n.httpC.Do(req)
 
 	return
 }
