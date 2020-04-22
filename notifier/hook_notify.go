@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hashicorp/go-cleanhttp"
-	"io"
 	"net/http"
 	"seedbox-sync/model"
 	"seedbox-sync/provider"
@@ -74,16 +73,13 @@ func (n *HookNotifier) request(hook model.Hook) (err error) {
 		return
 	}
 
-	// Prepare the pipeline between payload generation and request
-	pOut, _ := io.Pipe()
 	// Prepare the request
 	var req *http.Request
-	if req, err = http.NewRequest(hook.Method, hook.Url, pOut); err != nil {
+	if req, err = http.NewRequest(hook.Method, hook.Url, nil); err != nil {
 		err = fmt.Errorf("can't prepare request for '%s' method: %v", hook.Method, err)
 		return
 	}
 
-	_, _ = n.httpC.Do(req)
-
+	_, err = n.httpC.Do(req)
 	return
 }
