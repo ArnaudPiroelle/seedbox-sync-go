@@ -5,11 +5,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"seedbox-sync/downloader"
 	"seedbox-sync/model"
 	"seedbox-sync/notifier"
 	"seedbox-sync/provider"
 	"strings"
+	"syscall"
 )
 
 type Sync struct {
@@ -64,7 +66,10 @@ func (s *Sync) downloadTorrent(folder model.Folder, torrent provider.Torrent) {
 
 	if !hasError {
 		for _, file := range torrent.Files {
-			s.moveFile(folder, file)
+			err := s.moveFile(folder, file)
+			if err != nil {
+				return
+			}
 		}
 		_ = s.provider.SetLocation(torrent, folder.RemoteSharePath)
 		//TODO revert move if setlocation failed
@@ -127,14 +132,27 @@ func (s *Sync) downloadFile(folder model.Folder, file provider.TorrentFile) erro
 	return nil
 }
 
-func (s *Sync) moveFile(folder model.Folder, file provider.TorrentFile) {
+func (s *Sync) moveFile(folder model.Folder, file provider.TorrentFile) (err error) {
 	//TODO check available space before move a file
 	oldName := folder.LocalTempPath + "/" + file.Name
 	newName := folder.LocalPostProcessingPath + "/" + file.Name
 
 	parent := filepath.Dir(newName)
 	_ = os.MkdirAll(parent, 0755)
-	_ = moveFile(oldName, newName)
+	err = os.Rename(oldName, newName)
+	le, ok := err.(*os.LinkError)
+	if !ok {
+		return err
+	}
+	// 0x11 is Win32 Error Code ERROR_NOT_SAME_DEVICE (https://msdn.microsoft.com/en-us/library/cc231199.aspx)
+	if le.Err == syscall.Errno(0x12) || (runtime.GOOS == "windows" && le.Err == syscall.Errno(0x11)) {
+		err = moveFile(oldName, newName)
+		if err != nil {
+			return err
+		}
+	}
+	return
+
 }
 
 func moveFile(sourcePath, destPath string) error {
